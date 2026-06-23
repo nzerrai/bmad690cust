@@ -1,0 +1,112 @@
+# generated: 2026-06-23
+# last_updated: 2026-06-23
+# project: bmad690
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: prjdocs/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; sprint-status surfaces open ones
+
+generated: 2026-06-23
+last_updated: 2026-06-23
+project: bmad690
+project_key: NOKEY
+tracking_system: file-system
+story_location: prjdocs/implementation-artifacts
+
+development_status:
+  # ── Epic 1 : Authentification & Organisation des espaces de travail ──────────
+  epic-1: backlog
+  1-0-initialisation-du-projet-depuis-les-starters: backlog
+  1-1-authentification-sso-ldap-jwt-cote-serveur: backlog
+  1-2-interface-de-connexion-et-etat-dauthentification-frontend: backlog
+  1-3-creation-et-personnalisation-dun-espace-de-travail: backlog
+  1-4-gestion-de-la-hierarchie-projet-sous-projet: backlog
+  1-5-gestion-des-membres-et-controle-de-visibilite: backlog
+  1-6-shell-applicatif-layout-trois-zones-et-navigation-sidebar: backlog
+  1-7-archivage-dun-sous-projet: backlog
+  epic-1-retrospective: optional
+
+  # ── Epic 2 : Création, configuration et export de datasets ───────────────────
+  epic-2: backlog
+  2-1-upload-csv-et-creation-dun-dataset: backlog
+  2-2-detection-automatique-de-typologies-avec-score-de-confiance: backlog
+  2-3-configuration-des-colonnes-typologies-et-contraintes: backlog
+  2-4-catalogue-de-typologies-et-drawer-de-selection: backlog
+  2-5-parametres-de-generation-nombre-de-lignes-et-seed: backlog
+  2-6-previsualisation-du-dataset: backlog
+  2-7-telechargement-marquage-test-data-et-partage-du-dataset: backlog
+  2-8-restauration-de-la-configuration-et-gestion-du-dataset: backlog
+  epic-2-retrospective: optional
+
+  # ── Epic 3 : Génération asynchrone et reproductibilité ───────────────────────
+  epic-3: backlog
+  3-1-soumission-dun-job-de-generation-asynchrone: backlog
+  3-2-suivi-de-la-progression-dun-job-en-temps-reel: backlog
+  3-3-generation-de-donnees-conformes-aux-contraintes-des-typologies: backlog
+  3-4-reproductibilite-par-seed-et-regeneration: backlog
+  epic-3-retrospective: optional
+
+  # ── Epic 4 : Test Lab & Gestion des typologies ───────────────────────────────
+  epic-4: backlog
+  4-1-test-lab-generation-dexemples-a-la-demande: backlog
+  4-2-assistant-de-creation-de-typologies: backlog
+  4-3-export-yaml-et-publication-dune-typologie: backlog
+  epic-4-retrospective: optional
+
+  # ── Epic 5 : Import DDL & Génération multi-tables ────────────────────────────
+  epic-5: backlog
+  5-1-import-dun-schema-sql-ddl: backlog
+  5-2-analyse-ddl-graphe-de-dependances-fk-et-detection-de-cycles: backlog
+  5-3-visualisation-interactive-du-graphe-fk: backlog
+  5-4-configuration-des-colonnes-ddl-et-generation-multi-tables: backlog
+  epic-5-retrospective: optional
+
+  # ── Epic 6 : Intégration API REST ────────────────────────────────────────────
+  epic-6: backlog
+  6-1-authentification-api-externe-et-versioning: backlog
+  6-2-crud-de-configurations-de-datasets-via-api: backlog
+  6-3-declenchement-de-generation-et-polling-de-statut-via-api: backlog
+  6-4-extraction-de-lignes-et-telechargement-de-dataset-via-api: backlog
+  epic-6-retrospective: optional
+
+  # ── Epic 7 : Administration, suivi d'activité & conformité ──────────────────
+  epic-7: backlog
+  7-1-audit-trail-enregistrement-automatique-des-operations: backlog
+  7-2-historique-dactivite-dun-dataset: backlog
+  7-3-dashboard-dactivite-et-statistiques-despace: backlog
+  7-4-configuration-de-la-retention-et-purge-des-donnees: backlog
+  epic-7-retrospective: optional
