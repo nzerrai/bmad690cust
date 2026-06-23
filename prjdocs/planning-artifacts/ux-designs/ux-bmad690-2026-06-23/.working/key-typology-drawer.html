@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GenData — Tiroir de configuration typologique</title>
+  <style>
+    /*
+     * SPINE SECTIONS ILLUSTRATED:
+     * EXPERIENCE.md — Component Patterns: C-03 TypologyChip, C-01 ConfidenceBadge, C-04 ColumnConfigRow (attention state)
+     * EXPERIENCE.md — State Patterns: column row "attention" state (orange highlight), drawer open overlay
+     * EXPERIENCE.md — Interaction Primitives: Drawer 400px slide-in right, Typology Browser search + filter chips
+     * EXPERIENCE.md — Key Flows: Flow 2 (Fatima) — Étapes 2-5: correction colonne ambiguë → Typology Browser → Test Lab → Assigner
+     * EXPERIENCE.md — Modal/Overlay Patterns: Drawer (non-destructive) vs Dialog (destructive only)
+     * DESIGN.md — Components: button-primary, button-secondary, confidence-badge-*, typology-chip-warning, column-row-attention
+     */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 13px;
+      color: #1a1a2e;
+      background: #f5f5f5;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── TOPBAR ── */
+    .topbar {
+      height: 48px;
+      min-height: 48px;
+      background: #1565c0;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 8px;
+      z-index: 100;
+      flex-shrink: 0;
+    }
+    .topbar-logo {
+      font-size: 16px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+      margin-right: 8px;
+    }
+    .topbar-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.75);
+    }
+    .topbar-breadcrumb .sep { color: rgba(255,255,255,0.4); }
+    .topbar-breadcrumb .current { color: #ffffff; font-weight: 600; }
+    .topbar-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── BELOW TOPBAR ── */
+    .below-topbar {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 260px;
+      min-width: 260px;
+      background: #ffffff;
+      border-right: 1px solid #e0e0e0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      padding: 12px 0;
+      opacity: 0.45;
+    }
+    .sidebar-section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: #757575;
+      padding: 12px 16px 4px;
+    }
+    .sidebar-item {
+      padding: 7px 16px;
+      font-size: 13px;
+      color: #1a1a2e;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sidebar-item.active {
+      background: #e3f2fd;
+      color: #1565c0;
+      font-weight: 600;
+    }
+    .sidebar-item .icon { font-size: 14px; opacity: 0.7; }
+    .sidebar-sub {
+      padding: 5px 16px 5px 36px;
+      font-size: 12px;
+      color: #757575;
+      cursor: pointer;
+    }
+    .sidebar-sub.active {
+      color: #1565c0;
+      font-weight: 600;
+    }
+
+    /* ── MAIN CONTENT (dimmed) ── */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      opacity: 0.38;
+      pointer-events: none;
+      user-select: none;
+    }
+    .page-header {
+      margin-bottom: 16px;
+    }
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 4px;
+    }
+    .page-meta {
+      font-size: 12px;
+      color: #757575;
+    }
+
+    /* Config table */
+    .config-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .config-toolbar-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+    .btn-primary {
+      background: #1565c0;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-success {
+      background: #2e7d32;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .config-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .config-table th {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: #757575;
+      padding: 8px 12px;
+      background: #ffffff;
+      border-bottom: 1px solid #e0e0e0;
+      text-align: left;
+    }
+    .config-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #e0e0e0;
+      font-size: 13px;
+      vertical-align: middle;
+    }
+    .row-normal td { background: #ffffff; }
+    .row-attention td {
+      background: #fff8e1;
+      border-left: 3px solid #f57c00;
+    }
+    .row-locked td { background: #e3f2fd; }
+    .row-normal:last-child td, .row-attention:last-child td, .row-locked:last-child td {
+      border-bottom: none;
+    }
+    .col-name { font-family: 'Roboto Mono', monospace; font-size: 13px; }
+    .chip {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .chip-validated { background: #e3f2fd; color: #1565c0; }
+    .chip-warning { background: #fff3e0; color: #f57c00; }
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+    .badge-high { background: #2e7d32; }
+    .badge-medium { background: #f57c00; }
+    .badge-low { background: #d32f2f; }
+    .toggle-off {
+      display: inline-block;
+      width: 32px; height: 18px;
+      background: #e0e0e0;
+      border-radius: 9px;
+      position: relative;
+      vertical-align: middle;
+    }
+    .toggle-on {
+      display: inline-block;
+      width: 32px; height: 18px;
+      background: #1565c0;
+      border-radius: 9px;
+      position: relative;
+      vertical-align: middle;
+    }
+
+    /* ── DRAWER OVERLAY SCRIM ── */
+    .drawer-scrim {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.12);
+      z-index: 199;
+    }
+
+    /* ── DRAWER ── */
+    .drawer {
+      position: absolute;
+      top: 0; right: 0;
+      width: 400px;
+      height: 100%;
+      background: #ffffff;
+      box-shadow: -4px 0 16px rgba(0,0,0,0.12);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Drawer header */
+    .drawer-header {
+      height: 48px;
+      min-height: 48px;
+      padding: 0 16px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .drawer-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+    .drawer-title .col-code {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 14px;
+      color: #f57c00;
+    }
+    .drawer-close {
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #757575;
+      font-size: 18px;
+      border: none;
+      background: transparent;
+    }
+    .drawer-close:hover { background: #f5f5f5; }
+
+    /* Drawer body */
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0;
+    }
+
+    /* Drawer sections */
+    .drawer-section {
+      padding: 16px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .drawer-section:last-of-type { border-bottom: none; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: #757575;
+      margin-bottom: 10px;
+    }
+
+    /* Current typology row */
+    .current-typo-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .chip-warning-lg {
+      padding: 4px 10px;
+      border-radius: 4px;
+      background: #fff3e0;
+      color: #f57c00;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* Search */
+    .search-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: 'Inter', system-ui, sans-serif;
+      color: #1a1a2e;
+      outline: none;
+      margin-bottom: 10px;
+    }
+    .search-input:focus { border-color: #90caf9; }
+
+    /* Filter chips */
+    .filter-chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .filter-chip {
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid #e0e0e0;
+      background: #ffffff;
+      color: #757575;
+      cursor: pointer;
+    }
+    .filter-chip.active {
+      background: #1565c0;
+      color: #ffffff;
+      border-color: #1565c0;
+    }
+
+    /* Results list */
+    .results-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+    }
+    .result-row {
+      display: flex;
+      align-items: center;
+      padding: 8px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .result-row:last-child { border-bottom: none; }
+    .result-row.highlighted { background: #e3f2fd; }
+    .result-info { flex: 1; min-width: 0; }
+    .result-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .result-desc {
+      font-size: 12px;
+      color: #757575;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .btn-select {
+      background: #ffffff;
+      border: 1px solid #1565c0;
+      color: #1565c0;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: 'Inter', system-ui, sans-serif;
+      flex-shrink: 0;
+    }
+
+    /* Test Lab */
+    .testlab-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .testlab-toggle-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: #757575;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .caret { font-size: 10px; }
+    .alert-info {
+      background: #e3f2fd;
+      border-left: 4px solid #1565c0;
+      padding: 8px 12px;
+      border-radius: 0 4px 4px 0;
+      font-size: 12px;
+      color: #1a1a2e;
+      margin-bottom: 12px;
+    }
+    .param-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .param-row label { color: #1a1a2e; }
+    .param-row-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #757575;
+      font-size: 12px;
+    }
+    .toggle-visual {
+      width: 32px;
+      height: 18px;
+      border-radius: 9px;
+      display: inline-block;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .toggle-visual::after {
+      content: '';
+      position: absolute;
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: #ffffff;
+      top: 3px;
+    }
+    .toggle-visual.off { background: #e0e0e0; }
+    .toggle-visual.off::after { left: 3px; }
+    .toggle-visual.on { background: #1565c0; }
+    .toggle-visual.on::after { right: 3px; }
+
+    .subsection-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: #757575;
+      margin-bottom: 8px;
+      margin-top: 12px;
+    }
+    .examples-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .example-pill {
+      display: inline-block;
+      padding: 3px 8px;
+      background: #f5f5f5;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      font-family: 'Roboto Mono', monospace;
+      font-size: 13px;
+      color: #1a1a2e;
+    }
+    .btn-secondary {
+      background: #ffffff;
+      border: 1px solid #1565c0;
+      color: #1565c0;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+
+    /* Drawer footer */
+    .drawer-footer {
+      padding: 12px 16px;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-shrink: 0;
+      background: #ffffff;
+    }
+    .btn-ghost {
+      background: transparent;
+      border: none;
+      color: #757575;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 12px;
+      cursor: pointer;
+      border-radius: 6px;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .btn-ghost:hover { background: #f5f5f5; }
+    .btn-primary-full {
+      background: #1565c0;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Inter', system-ui, sans-serif;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <span class="topbar-logo">GenData</span>
+    <div class="topbar-breadcrumb">
+      <span>KYC Département</span>
+      <span class="sep">›</span>
+      <span>Projet Onboarding</span>
+      <span class="sep">›</span>
+      <span>Dataset Clients 2024</span>
+      <span class="sep">›</span>
+      <span class="current">Configuration</span>
+    </div>
+    <div class="topbar-right">
+      <div class="avatar">FH</div>
+    </div>
+  </div>
+
+  <!-- BELOW TOPBAR -->
+  <div class="below-topbar">
+
+    <!-- SIDEBAR (dimmed) -->
+    <div class="sidebar">
+      <div class="sidebar-section-label">KYC Département</div>
+      <div class="sidebar-item"><span class="icon">📁</span> Projet Onboarding</div>
+      <div class="sidebar-sub">Sous-projet KYC Standard</div>
+      <div class="sidebar-sub active">Dataset Clients 2024</div>
+      <div class="sidebar-sub">Dataset Transactions</div>
+      <div class="sidebar-item"><span class="icon">📁</span> Projet Scoring</div>
+      <div class="sidebar-item"><span class="icon">📁</span> Projet AML</div>
+      <div class="sidebar-section-label" style="margin-top:12px;">Outils</div>
+      <div class="sidebar-item"><span class="icon">🔍</span> Navigateur DDL</div>
+      <div class="sidebar-item"><span class="icon">📊</span> Statistiques</div>
+    </div>
+
+    <!-- MAIN CONTENT (dimmed) -->
+    <div class="main-content">
+      <div class="page-header">
+        <div class="page-title">Dataset Clients 2024</div>
+        <div class="page-meta">Import CSV · 18 colonnes détectées · Seed: <span style="font-family:monospace">7f3a9c21</span></div>
+      </div>
+
+      <div class="config-toolbar">
+        <div class="config-toolbar-title">Configuration des colonnes</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary">Aperçu (5 lignes)</button>
+          <button class="btn-success">⚡ Générer 1 000 lignes</button>
+        </div>
+      </div>
+
+      <table class="config-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Colonne</th>
+            <th>Typologie</th>
+            <th>Confiance</th>
+            <th>Nullable</th>
+            <th>Unique</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="row-normal">
+            <td>1</td>
+            <td class="col-name">client_id</td>
+            <td><span class="chip chip-validated">Identifiant UUID</span></td>
+            <td><span class="badge badge-high">97%</span></td>
+            <td><span class="toggle-off"></span></td>
+            <td><span class="toggle-on"></span></td>
+            <td>⚙</td>
+          </tr>
+          <tr class="row-normal">
+            <td>2</td>
+            <td class="col-name">nom</td>
+            <td><span class="chip chip-validated">Nom de famille FR</span></td>
+            <td><span class="badge badge-high">91%</span></td>
+            <td><span class="toggle-off"></span></td>
+            <td><span class="toggle-off"></span></td>
+            <td>⚙</td>
+          </tr>
+          <!-- attention row (active) -->
+          <tr class="row-attention">
+            <td>3</td>
+            <td class="col-name" style="color:#f57c00;font-weight:600">code_operation</td>
+            <td><span class="chip chip-warning">Non détectée</span></td>
+            <td><span class="badge badge-low">43%</span></td>
+            <td><span class="toggle-off"></span></td>
+            <td><span class="toggle-off"></span></td>
+            <td style="color:#1565c0;font-weight:700">⚙</td>
+          </tr>
+          <tr class="row-locked">
+            <td>4</td>
+            <td class="col-name">iban</td>
+            <td><span class="chip chip-validated">IBAN FR</span></td>
+            <td><span class="badge badge-high">99%</span></td>
+            <td><span class="toggle-off"></span></td>
+            <td><span class="toggle-on"></span></td>
+            <td>⚙</td>
+          </tr>
+          <tr class="row-normal">
+            <td>5</td>
+            <td class="col-name">montant_eur</td>
+            <td><span class="chip chip-validated">Montant EUR</span></td>
+            <td><span class="badge badge-high">88%</span></td>
+            <td><span class="toggle-off"></span></td>
+            <td><span class="toggle-off"></span></td>
+            <td>⚙</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- DRAWER SCRIM -->
+    <div class="drawer-scrim"></div>
+
+    <!-- DRAWER -->
+    <div class="drawer">
+
+      <!-- Header -->
+      <div class="drawer-header">
+        <div class="drawer-title">
+          Configuration — <span class="col-code">code_operation</span>
+        </div>
+        <button class="drawer-close">✕</button>
+      </div>
+
+      <!-- Body -->
+      <div class="drawer-body">
+
+        <!-- Section 1: Typologie actuelle -->
+        <div class="drawer-section">
+          <div class="section-label">Typologie actuelle</div>
+          <div class="current-typo-row">
+            <span class="chip-warning-lg">Non détectée</span>
+            <span class="badge badge-low">43%</span>
+          </div>
+        </div>
+
+        <!-- Section 2: Typology Browser -->
+        <div class="drawer-section">
+          <div class="section-label">Navigateur de typologies</div>
+
+          <input
+            class="search-input"
+            type="text"
+            placeholder="Rechercher une typologie…"
+            value="code opé"
+          />
+
+          <div class="filter-chips">
+            <span class="filter-chip active">Tous</span>
+            <span class="filter-chip">Bancaire</span>
+            <span class="filter-chip">Identifiants</span>
+            <span class="filter-chip">Géographie</span>
+            <span class="filter-chip">Montants</span>
+          </div>
+
+          <div class="results-list">
+            <!-- Row 1: highlighted (hover/focus) -->
+            <div class="result-row highlighted">
+              <div class="result-info">
+                <div class="result-name">Code opération bancaire</div>
+                <div class="result-desc">Génère des codes SCT, SDD, etc.</div>
+              </div>
+              <span class="badge badge-high" style="flex-shrink:0">89%</span>
+              <button class="btn-select">Sélectionner</button>
+            </div>
+            <!-- Row 2 -->
+            <div class="result-row">
+              <div class="result-info">
+                <div class="result-name">Code BIC/SWIFT</div>
+                <div class="result-desc">Identifiant international de banque</div>
+              </div>
+              <span class="badge badge-medium" style="flex-shrink:0">61%</span>
+              <button class="btn-select">Sélectionner</button>
+            </div>
+            <!-- Row 3 -->
+            <div class="result-row">
+              <div class="result-info">
+                <div class="result-name">Libellé opération</div>
+                <div class="result-desc">Description textuelle d'opération</div>
+              </div>
+              <span class="badge badge-low" style="flex-shrink:0">44%</span>
+              <button class="btn-select">Sélectionner</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Test Lab -->
+        <div class="drawer-section">
+          <div class="testlab-header">
+            <div class="testlab-toggle-label">
+              Test Lab
+              <span class="caret">▲</span>
+            </div>
+          </div>
+
+          <div class="alert-info">
+            Configurez les paramètres et observez des exemples en temps réel.
+          </div>
+
+          <div class="subsection-label">Paramètres</div>
+          <div class="param-row">
+            <label>Valeurs nulles</label>
+            <div class="param-row-right">
+              <span class="toggle-visual off"></span>
+              <span>0%</span>
+            </div>
+          </div>
+          <div class="param-row">
+            <label>Valeurs uniques</label>
+            <div class="param-row-right">
+              <span class="toggle-visual on"></span>
+            </div>
+          </div>
+
+          <div class="subsection-label">Exemples générés</div>
+          <div class="examples-row">
+            <span class="example-pill">SCT</span>
+            <span class="example-pill">SDD</span>
+            <span class="example-pill">SCT</span>
+            <span class="example-pill">SDD-R</span>
+            <span class="example-pill">SCT</span>
+          </div>
+
+          <button class="btn-secondary">Générer de nouveaux exemples</button>
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="drawer-footer">
+        <button class="btn-ghost">Annuler</button>
+        <button class="btn-primary-full">Assigner "Code opération bancaire"</button>
+      </div>
+
+    </div>
+    <!-- /drawer -->
+
+  </div>
+  <!-- /below-topbar -->
+
+</body>
+</html>

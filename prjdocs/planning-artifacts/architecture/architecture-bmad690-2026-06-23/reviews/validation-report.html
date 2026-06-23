@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revue Architecture — GenData</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 1.6; background: #f5f5f5; color: #1a1a2e; }
+  a { color: #1565c0; }
+
+  /* Layout */
+  .topbar { background: #1565c0; color: #fff; padding: 14px 32px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
+  .topbar h1 { font-size: 16px; font-weight: 700; }
+  .topbar .meta { font-size: 12px; opacity: .75; margin-left: auto; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 24px; }
+
+  /* Verdict banner */
+  .verdict { border-radius: 8px; padding: 20px 24px; display: flex; gap: 16px; align-items: flex-start; }
+  .verdict.warn  { background: #fff3e0; border-left: 5px solid #f57c00; }
+  .verdict-icon  { font-size: 28px; line-height: 1; flex-shrink: 0; }
+  .verdict-text h2 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+  .verdict-text p  { font-size: 13px; color: #424242; }
+
+  /* Stats row */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat-card { background: #fff; border-radius: 6px; border: 1px solid #e0e0e0; padding: 16px; text-align: center; }
+  .stat-card .value { font-size: 32px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+  .stat-card .label { font-size: 11px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: #757575; }
+  .critical .value { color: #d32f2f; }
+  .high     .value { color: #f57c00; }
+  .medium   .value { color: #1565c0; }
+  .low      .value { color: #2e7d32; }
+
+  /* Section cards */
+  .section { background: #fff; border-radius: 8px; border: 1px solid #e0e0e0; overflow: hidden; }
+  .section-header { padding: 14px 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #e0e0e0; }
+  .section-header h2 { font-size: 15px; font-weight: 700; }
+  .section-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* Finding cards */
+  .finding { border-radius: 6px; border-left: 4px solid; padding: 14px 16px; }
+  .finding.critical { background: #fce4ec; border-color: #d32f2f; }
+  .finding.high     { background: #fff3e0; border-color: #f57c00; }
+  .finding.medium   { background: #e3f2fd; border-color: #1565c0; }
+  .finding.low      { background: #e8f5e9; border-color: #2e7d32; }
+  .finding-head     { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .badge            { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; border-radius: 999px; padding: 2px 8px; color: #fff; flex-shrink: 0; }
+  .badge.critical   { background: #d32f2f; }
+  .badge.high       { background: #f57c00; }
+  .badge.medium     { background: #1565c0; }
+  .badge.low        { background: #2e7d32; }
+  .finding-id       { font-family: 'Roboto Mono', monospace; font-size: 11px; font-weight: 700; color: #757575; }
+  .finding-title    { font-size: 14px; font-weight: 700; }
+  .finding-body     { font-size: 13px; color: #1a1a2e; margin-top: 4px; }
+  .finding-body p   { margin-bottom: 6px; }
+  .finding-fix      { margin-top: 8px; font-size: 12px; background: rgba(255,255,255,.6); border-radius: 4px; padding: 8px 10px; border-left: 3px solid rgba(0,0,0,.12); }
+  .finding-fix strong { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #757575; margin-bottom: 2px; }
+
+  /* Scenario clash boxes */
+  .clash-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .clash-side { background: rgba(255,255,255,.6); border-radius: 4px; padding: 8px 10px; font-size: 12px; }
+  .clash-side .role { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #757575; margin-bottom: 2px; }
+
+  /* Version table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: #757575; padding: 8px 12px; border-bottom: 2px solid #e0e0e0; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .tag-ok     { display: inline-block; background: #e8f5e9; color: #2e7d32; border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: 700; }
+  .tag-warn   { display: inline-block; background: #fff3e0; color: #f57c00; border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: 700; }
+  .tag-err    { display: inline-block; background: #fce4ec; color: #d32f2f; border-radius: 4px; padding: 1px 6px; font-size: 11px; font-weight: 700; }
+
+  /* Checklist */
+  .checklist { display: flex; flex-direction: column; gap: 4px; }
+  .check-row { display: flex; align-items: baseline; gap: 10px; padding: 6px 10px; border-radius: 4px; }
+  .check-row:nth-child(odd) { background: #fafafa; }
+  .check-icon { font-size: 15px; flex-shrink: 0; width: 20px; text-align: center; }
+  .check-label { font-size: 13px; font-weight: 600; flex: 0 0 260px; }
+  .check-note  { font-size: 12px; color: #424242; }
+
+  /* Footer */
+  .footer { text-align: center; font-size: 12px; color: #9e9e9e; padding: 8px; }
+  .reviewer-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .pill { font-size: 11px; background: #e3f2fd; color: #1565c0; border-radius: 999px; padding: 2px 10px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Revue Architecture — GenData</h1>
+  <div class="meta">23 juin 2026 · 3 lentilles · lint mécanique</div>
+</div>
+
+<div class="container">
+
+  <!-- Verdict -->
+  <div class="verdict warn">
+    <div class="verdict-icon">⚠️</div>
+    <div class="verdict-text">
+      <h2>Architecture solide sur la couverture fonctionnelle — 5 blocants à corriger avant handoff</h2>
+      <p>Les 53 FRs et 26 NFRs sont couverts. Les décisions D-01→D-16 et patterns P-01→P-09 sont lisibles et enforce­ables. Mais la frontière <code>generation-engine</code>, deux surfaces RBAC non protégées, et des versions partiellement dépassées créent des risques réels d'implémentation incompatible.</p>
+      <div class="reviewer-pills" style="margin-top:10px;">
+        <span class="pill">Rubric walker</span>
+        <span class="pill">Adversarial boundary</span>
+        <span class="pill">Version &amp; tech check</span>
+        <span class="pill">Lint mécanique (9 faux positifs — propre)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card critical"><div class="value">5</div><div class="label">Critiques</div></div>
+    <div class="stat-card high">   <div class="value">5</div><div class="label">Hauts</div></div>
+    <div class="stat-card medium"> <div class="value">2</div><div class="label">Moyens</div></div>
+    <div class="stat-card low">    <div class="value">7</div><div class="label">Versions à mettre à jour</div></div>
+  </div>
+
+  <!-- CRITICAL -->
+  <div class="section">
+    <div class="section-header">
+      <span style="color:#d32f2f;font-size:18px;">●</span>
+      <h2>Critiques — bloquent l'implémentation ou permettent une divergence réelle</h2>
+    </div>
+    <div class="section-body">
+
+      <div class="finding critical">
+        <div class="finding-head">
+          <span class="badge critical">Critique</span>
+          <span class="finding-id">C-01 · Rubric + Adversarial S-01 S-02</span>
+        </div>
+        <div class="finding-title">Frontière generation-engine — 3 sous-questions sans réponse</div>
+        <div class="finding-body">
+          <p>Le document liste <code>generation-engine</code> comme bounded context distinct de <code>dataset-api</code> mais les place dans le même Spring Boot. Trois décisions laissées ouvertes créent des interfaces incompatibles entre builders :</p>
+          <div class="clash-row">
+            <div class="clash-side"><div class="role">Qui déclenche le job ?</div>Appel direct <code>JobLauncher.run()</code> depuis <code>DatasetService</code> ? Événement interne ? Endpoint séparé ? D-08 montre <code>GET /api/datasets/{id}/status</code> sans préciser quel package l'héberge.</div>
+            <div class="clash-side"><div class="role">PRNG non spécifié (S-01)</div>Builder A utilise <code>java.util.Random(seed)</code>, Builder B <code>ThreadLocalRandom</code>. D-02 spécifie le triple <code>typology_id+version+sha256</code> mais pas l'algorithme PRNG ni la dérivation du seed par colonne → même seed, données différentes.</div>
+          </div>
+          <div class="clash-row" style="margin-top:8px;">
+            <div class="clash-side"><div class="role">Propriétaire du status (S-02)</div><code>GenerationJobListener</code> (Batch) écrit RUNNING/COMPLETED ; <code>DatasetService</code> écrit PENDING/CANCELLED. Deux writers sur le même champ sans règle d'ownership → race condition sur le status.</div>
+            <div class="clash-side"><div class="role">Quota "5 jobs/user" (NFR-SC02)</div>Mentionné dans les cross-cutting concerns, aucun mécanisme d'enforcement défini : <code>GenerationService</code> ? <code>JobExecutionListener</code> ? Filtre ?</div>
+          </div>
+        </div>
+        <div class="finding-fix">
+          <strong>Corrections à apporter</strong>
+          1. Déclarer le déclencheur : <code>DatasetService.startGeneration()</code> appelle <code>JobLauncher.run()</code> — responsabilité <code>dataset-api</code>.<br>
+          2. Règle PRNG : <em>"Column seed = <code>Long.hashCode(datasetSeed) ^ columnIndex</code> ; PRNG = <code>new java.util.Random(columnSeed)</code> — aucun autre générateur autorisé."</em><br>
+          3. Single writer : seul <code>GenerationJobListener</code> (Batch) écrit les transitions après soumission ; <code>dataset-api</code> appelle <code>generationEngine.requestCancel(jobId)</code> et ne touche jamais directement <code>status</code>.<br>
+          4. Quota : <code>GenerationService.submitJob()</code> vérifie le compte avant création — rejette avec <code>429 TOO_MANY_REQUESTS</code> si dépassé.
+        </div>
+      </div>
+
+      <div class="finding critical">
+        <div class="finding-head">
+          <span class="badge critical">Critique</span>
+          <span class="finding-id">C-02 · Adversarial S-03</span>
+        </div>
+        <div class="finding-title">DDL endpoints hors périmètre SpaceSecurityFilter — bypass RBAC</div>
+        <div class="finding-body">
+          <div class="clash-row">
+            <div class="clash-side"><div class="role">Builder sécurité</div>Implémente <code>SpaceSecurityFilter</code> couvrant <code>/api/workspaces/{id}/**</code> exactement selon D-05.</div>
+            <div class="clash-side"><div class="role">Builder DDL</div>Implémente <code>DdlController</code> sous <code>/api/ddl/{did}</code> (chemin plat naturel pour un service transversal, cohérent avec <code>com.gendata.ddl</code> package peer).</div>
+          </div>
+          <p style="margin-top:8px;">D-05 ne couvre pas <code>/api/ddl/**</code>. Les endpoints DDL bypassent le RBAC espace. Le mapping FR34–40 range DDL sous <code>dataset-api</code> dans un tableau et sous <code>com.gendata.ddl</code> dans un autre — deux builders choisissent des préfixes d'URL incompatibles.</p>
+        </div>
+        <div class="finding-fix">
+          <strong>Fix</strong>
+          Déclarer le préfixe canonique DDL : <code>/api/workspaces/{wid}/projects/{pid}/subprojects/{spid}/ddl/{did}/**</code> — cela le place automatiquement sous le périmètre du <code>SpaceSecurityFilter</code>. Cohérent avec le routing deep-link D-12.
+        </div>
+      </div>
+
+      <div class="finding critical">
+        <div class="finding-head">
+          <span class="badge critical">Critique</span>
+          <span class="finding-id">C-03 · Adversarial S-04</span>
+        </div>
+        <div class="finding-title">Export Controller hors périmètre RBAC — fuite cross-espace possible</div>
+        <div class="finding-body">
+          <div class="clash-row">
+            <div class="clash-side"><div class="role">Builder export</div>Implémente <code>ExportController</code> à <code>/api/export/{datasetId}</code> avec <code>StreamingResponseBody</code> (D-09). Appelle <code>DatasetRepository.findById()</code> directement.</div>
+            <div class="clash-side"><div class="role">Builder sécurité</div><code>SpaceSecurityFilter</code> couvre <code>/api/workspaces/{id}/**</code>. <code>/api/export/**</code> n'est pas dans le périmètre.</div>
+          </div>
+          <p style="margin-top:8px;">Un utilisateur peut exporter n'importe quel dataset par UUID sans vérification d'appartenance à l'espace. D-06 ajoute <code>@Auditable</code> sur export — mais c'est du logging, pas une autorisation.</p>
+        </div>
+        <div class="finding-fix">
+          <strong>Fix</strong>
+          Imbriquer l'export sous le chemin workspace : <code>/api/workspaces/{wid}/datasets/{did}/export</code> — ou stipuler explicitement que <code>ExportService</code> doit appeler une vérification de membership identique au <code>SpaceSecurityFilter</code> avant de streamer.
+        </div>
+      </div>
+
+      <div class="finding critical">
+        <div class="finding-head">
+          <span class="badge critical">Critique</span>
+          <span class="finding-id">C-04 · Rubric C-02</span>
+        </div>
+        <div class="finding-title">Observabilité entièrement silencieuse</div>
+        <div class="finding-body">
+          <p>Outil bancaire avec NFR-P02 (1M lignes/min) et NFR-SC01 (1 000 users simultanés). L'observabilité est une dimension structurelle. Le document cite Spring Actuator mais ne définit rien :</p>
+          <ul style="margin-left:16px;margin-top:4px;font-size:13px;">
+            <li>Format de logs (JSON structuré ? Logback text ?) et niveau par défaut</li>
+            <li>Corrélation IDs requête HTTP → job Batch → entrée audit</li>
+            <li>Consommateur de <code>/health</code> et <code>/metrics</code> (Prometheus ? sonde interne ?)</li>
+            <li>Stack de log shipping (ELK, Loki, splunk interne ?)</li>
+          </ul>
+          <p style="margin-top:6px;">Deux builders implémentant la couche logging produiront des formats incompatibles.</p>
+        </div>
+        <div class="finding-fix">
+          <strong>Fix minimal</strong>
+          Ajouter D-17 Observabilité : format log JSON structuré (Logback + <code>logstash-logback-encoder</code>), MDC avec <code>correlationId</code> injecté sur chaque requête HTTP et propagé dans le thread Batch, Actuator exposé à l'équipe infra sur port admin séparé. Déférer la stack de shipping (Prometheus ? ELK ?) si elle n'est pas encore décidée.
+        </div>
+      </div>
+
+      <div class="finding critical">
+        <div class="finding-head">
+          <span class="badge critical">Critique</span>
+          <span class="finding-id">C-05 · Rubric C-03</span>
+        </div>
+        <div class="finding-title">Format D-01/P-01 sans champs Binds/Prevents/Rule — tooling BMad inopérant</div>
+        <div class="finding-body">
+          <p>Le document utilise le schéma <code>D-01 / P-01</code> au lieu du format ARCHITECTURE-SPINE.md (<code>AD-n</code> avec champs structurés <code>Binds:</code> / <code>Prevents:</code> / <code>Rule:</code>). <code>lint_spine.py</code> ne peut pas valider les règles par programme, et les agents aval ne peuvent pas citer les décisions par ID stable. Critique pour le tooling BMad — pas pour la compréhension humaine du document en l'état.</p>
+        </div>
+        <div class="finding-fix">
+          <strong>Fix</strong>
+          Soit convertir vers le format AD-n (effort moyen, gain tooling complet), soit documenter explicitement le choix de conserver le format D-01/P-01 comme variante maison et désactiver lint_spine.py pour ce projet.
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- HIGH -->
+  <div class="section">
+    <div class="section-header">
+      <span style="color:#f57c00;font-size:18px;">●</span>
+      <h2>Hauts — gaps significatifs, non bloquants Sprint 1</h2>
+    </div>
+    <div class="section-body">
+
+      <div class="finding high">
+        <div class="finding-head"><span class="badge high">Haut</span><span class="finding-id">H-01 · Adversarial S-05</span></div>
+        <div class="finding-title">Comportement header API-Version absent non défini</div>
+        <div class="finding-body"><p>D-07 dit que <code>HandlerMapping</code> "résout la version" depuis le header mais ne dit pas ce qui se passe si le header est absent. Builder A rejette avec 400, Builder B défault à v1. Contrat externe incompatible.</p></div>
+        <div class="finding-fix"><strong>Fix</strong> Ajouter une ligne à D-07 : "Header <code>API-Version</code> absent → rejet <code>400 BAD_REQUEST</code>, code erreur <code>MISSING_API_VERSION</code>."</div>
+      </div>
+
+      <div class="finding high">
+        <div class="finding-head"><span class="badge high">Haut</span><span class="finding-id">H-02 · Adversarial S-06</span></div>
+        <div class="finding-title">Scope audit D-06 vs P-09 — export non couvert dans P-09</div>
+        <div class="finding-body"><p>D-06 : "toutes les méthodes de génération + export" → <code>@Auditable</code>. P-09 règle 4 : "Toute génération de données déclenche <code>@Auditable</code>" — export absent. Builder implémentant <code>ExportService</code> depuis P-09 n'annotate pas l'export. NFR-S04 (audit 100%) non respecté.</p></div>
+        <div class="finding-fix"><strong>Fix</strong> P-09 règle 4 : remplacer "génération" par "génération ou export".</div>
+      </div>
+
+      <div class="finding high">
+        <div class="finding-head"><span class="badge high">Haut</span><span class="finding-id">H-03 · Rubric H-01</span></div>
+        <div class="finding-title">CORS policy non définie</div>
+        <div class="finding-body"><p><code>WebConfig.java</code> est mentionné comme point d'entrée CORS sans détail. Outil interne bancaire = origines strictement restreintes attendues. Sans directive, un builder crée une politique trop permissive (risque sécurité) ou trop restrictive (bloque le dev).</p></div>
+        <div class="finding-fix"><strong>Fix</strong> Ajouter à D-04 ou créer D-18 CORS : origines autorisées (ex. <code>*.banque-interne.fr</code> prod, <code>localhost:5173</code> dev uniquement), méthodes, headers autorisés.</div>
+      </div>
+
+      <div class="finding high">
+        <div class="finding-head"><span class="badge high">Haut</span><span class="finding-id">H-04 · Rubric H-02</span></div>
+        <div class="finding-title">Gestion des secrets non adressée</div>
+        <div class="finding-body"><p>JWT secret "configurable en env var" (D-04) — insuffisant en contexte bancaire. Aucune mention de Vault, k8s Secrets, ou solution équivalente. Builders assumera env var ; sécurité assumera autre chose.</p></div>
+        <div class="finding-fix"><strong>Fix</strong> Déclarer explicitement la stratégie pour MVP (env var + recommandation Vault Phase 2) ou la solution réelle si elle existe en infra bancaire.</div>
+      </div>
+
+      <div class="finding high">
+        <div class="finding-head"><span class="badge high">Haut</span><span class="finding-id">H-05 · Rubric H-03</span></div>
+        <div class="finding-title">Stratégie de migration DB (ongoing) absente</div>
+        <div class="finding-body"><p>7 migrations Flyway V1–V7 listées (seed). Aucune règle pour les migrations futures : convention de nommage au-delà de V7 ? Qui peut merger une migration ? Tests de migration obligatoires ? Sans règle, deux builders produiront des migrations conflictuelles.</p></div>
+        <div class="finding-fix"><strong>Fix</strong> Ajouter à P-01 ou créer P-10 Migrations : convention <code>V{N}__{description}.sql</code>, tests de migration obligatoires en CI, revue de migration requise pour tout changement de schéma production.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MEDIUM -->
+  <div class="section">
+    <div class="section-header">
+      <span style="color:#1565c0;font-size:18px;">●</span>
+      <h2>Moyens — à traiter avant Sprint 2</h2>
+    </div>
+    <div class="section-body">
+
+      <div class="finding medium">
+        <div class="finding-head"><span class="badge medium">Moyen</span><span class="finding-id">M-01 · Adversarial S-07</span></div>
+        <div class="finding-title">React Query — taxonomie de clés et invalidation cross-feature non définies</div>
+        <div class="finding-body"><p>D-11 mandate React Query pour tout l'état serveur mais ne définit pas les formes de clés. Deux builders définissent des clés disjointes (<code>['generation', did]</code> vs <code>['datasets', wid]</code>) — la completion d'une génération ne rafraîchit pas la liste datasets.</p></div>
+        <div class="finding-fix"><strong>Fix</strong> Ajouter à D-11 un registre de clés canoniques : <code>['workspaces', wid]</code>, <code>['datasets', wid, pid, spid]</code>, <code>['dataset', did]</code>, <code>['generation', did]</code>. Règle : on COMPLETED, invalider <code>['dataset', did]</code> + <code>['datasets', wid, pid, spid]</code>.</div>
+      </div>
+
+      <div class="finding medium">
+        <div class="finding-head"><span class="badge medium">Moyen</span><span class="finding-id">M-02 · Rubric H-04</span></div>
+        <div class="finding-title">Décisions déférées dispersées sans section consolidée</div>
+        <div class="finding-body"><p>WebSocket Phase 2, VIEWER Phase 2, Kubernetes Phase 3, SMTP Phase 2 sont disseminés dans le document. Un builder ne les verra pas tous et risque d'implémenter partiellement une feature Phase 2.</p></div>
+        <div class="finding-fix"><strong>Fix</strong> Ajouter une section "Décisions déférées" consolidée avec condition de revisit pour chaque item.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- VERSIONS -->
+  <div class="section">
+    <div class="section-header">
+      <span style="color:#2e7d32;font-size:18px;">●</span>
+      <h2>Versions — mises à jour recommandées</h2>
+    </div>
+    <div class="section-body">
+      <table>
+        <thead>
+          <tr><th>Technologie</th><th>Version doc</th><th>Statut</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Spring Boot</strong></td>
+            <td><code>3.2.x</code></td>
+            <td><span class="tag-err">OSS terminé nov. 2024</span></td>
+            <td>Mettre à jour vers <code>3.4.x</code> (dernier GA). CVEs sans patch en 3.2.x.</td>
+          </tr>
+          <tr>
+            <td><strong>bootVersion dans curl</strong></td>
+            <td><code>3.2.x</code> (wildcard)</td>
+            <td><span class="tag-err">Invalide — 400 à l'exécution</span></td>
+            <td>Remplacer par une version exacte, ex. <code>3.4.6</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>React</strong></td>
+            <td><code>18</code></td>
+            <td><span class="tag-warn">Supplanté par React 19 (déc. 2024)</span></td>
+            <td>Évaluer upgrade React 19 — MUI v6 supporte les deux. Si maintien v18, pinner <code>^18.3.1</code> et documenter le choix.</td>
+          </tr>
+          <tr>
+            <td><strong>Vite</strong></td>
+            <td><code>5</code></td>
+            <td><span class="tag-warn">Supplanté par Vite 6 (déc. 2024)</span></td>
+            <td>Mettre à jour vers Vite 6 — aucun breaking change pour template react-ts standard.</td>
+          </tr>
+          <tr>
+            <td><strong>react-router-dom</strong></td>
+            <td>implicit v6 (non pinnée)</td>
+            <td><span class="tag-warn">v7 sorti nov. 2024 — breaking changes</span></td>
+            <td>Pinner explicitement <code>react-router-dom@6</code> si maintien v6, ou planifier migration v7. La version doit apparaître dans le document.</td>
+          </tr>
+          <tr>
+            <td><strong>jjwt-api</strong></td>
+            <td><code>0.12.x</code> (wildcard)</td>
+            <td><span class="tag-warn">Wildcard non déterministe</span></td>
+            <td>Pinner à <code>0.12.6</code> (dernier patch de la ligne 0.12).</td>
+          </tr>
+          <tr>
+            <td><strong>jsqlparser</strong></td>
+            <td><code>4.9</code></td>
+            <td><span class="tag-warn">Vérifier 5.x</span></td>
+            <td>4.9 peut être acceptable — vérifier GitHub pour une release 5.x éventuelle en 2025-2026.</td>
+          </tr>
+          <tr>
+            <td><strong>PostgreSQL (Docker)</strong></td>
+            <td><code>postgres:15</code></td>
+            <td><span class="tag-ok">EOL nov. 2027 — acceptable</span></td>
+            <td>PG 17 est current. Aligner sur la version prod bancaire — si prod est PG 15, conserver et documenter. Sinon envisager <code>postgres:17</code>.</td>
+          </tr>
+          <tr>
+            <td><strong>Java</strong></td>
+            <td><code>17 LTS</code></td>
+            <td><span class="tag-ok">Support actif jusqu'en sept. 2029</span></td>
+            <td>Pas d'urgence. Si Spring Boot mis à jour vers 3.4.x, noter Java 21 comme runtime préféré (min. supporté reste 17).</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Checklist -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Checklist good-spine</h2>
+    </div>
+    <div class="section-body">
+      <div class="checklist">
+        <div class="check-row"><span class="check-icon">⚠️</span><span class="check-label">Divergence points couverts</span><span class="check-note">Partiel — frontière generation-engine laisse 3 questions ouvertes (C-01)</span></div>
+        <div class="check-row"><span class="check-icon">✅</span><span class="check-label">Règles enforceables</span><span class="check-note">P-09 avec 10 règles explicites + D-01→D-16 clairs pour les builders</span></div>
+        <div class="check-row"><span class="check-icon">⚠️</span><span class="check-label">Section Deferred consolidée</span><span class="check-note">Items présents mais dispersés dans le document (M-02)</span></div>
+        <div class="check-row"><span class="check-icon">❌</span><span class="check-label">Format AD-n avec Binds/Prevents/Rule</span><span class="check-note">Format D-01/P-01 sans champs structurés — tooling inopérant (C-05)</span></div>
+        <div class="check-row"><span class="check-icon">⚠️</span><span class="check-label">Versions technologiques courantes</span><span class="check-note">Spring Boot 3.2.x dépassé, 2 wildcards, react-router-dom non pinnée (voir tableau)</span></div>
+        <div class="check-row"><span class="check-icon">✅</span><span class="check-label">Ratification brownfield</span><span class="check-note">112 typologies YAML, LDAP/AD bancaire, PG 15 — intégrés sans contradiction</span></div>
+        <div class="check-row"><span class="check-icon">✅</span><span class="check-label">Couverture spec 53 FR / 26 NFR</span><span class="check-note">Mapping complet avec modules et fichiers cibles</span></div>
+        <div class="check-row"><span class="check-icon">⚠️</span><span class="check-label">Enveloppe opérationnelle</span><span class="check-note">D-14/15/16 présents — secrets management et log shipping absents (C-04, H-04)</span></div>
+        <div class="check-row"><span class="check-icon">❌</span><span class="check-label">Dimensions silencieuses</span><span class="check-note">Observabilité, CORS, secrets, migration ongoing, React Query keys (C-04, H-01→H-05, M-01)</span></div>
+        <div class="check-row"><span class="check-icon">❌</span><span class="check-label">Frontière generation-engine</span><span class="check-note">Déclencheur job, PRNG, owner status, quota — 3 risques de divergence réelle (C-01)</span></div>
+        <div class="check-row"><span class="check-icon">✅</span><span class="check-label">Sécurité — SpaceFilter + JWT</span><span class="check-note">Chaîne JWT → SpaceSecurityFilter bien séquencée, RBAC explicite — sauf DDL et export (C-02, C-03)</span></div>
+        <div class="check-row"><span class="check-icon">✅</span><span class="check-label">Brownfield non contredit</span><span class="check-note">Aucune décision ne contredit le code ou les contraintes existantes</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- What's good -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Points forts — ce qui tient</h2>
+    </div>
+    <div class="section-body" style="gap:8px;">
+      <p style="font-size:13px;">✅ &nbsp;Couverture fonctionnelle complète — 53 FRs et 26 NFRs mappés explicitement vers des modules et fichiers concrets.</p>
+      <p style="font-size:13px;">✅ &nbsp;P-09 "10 règles non-négociables" — contractualisation claire pour les agents implémenteurs, vérifiables au code review.</p>
+      <p style="font-size:13px;">✅ &nbsp;D-01 table partitionnée, D-02 versioning sha256, D-03 config immuable — trois décisions de données solides qui préviennent des classes entières de bugs.</p>
+      <p style="font-size:13px;">✅ &nbsp;Choix technologiques cohérents — Spring Boot 3.x + Security 6 + Batch 5 + Java 17 ; MUI v6 + React Query v5 + Zustand — matrice de compatibilité valide.</p>
+      <p style="font-size:13px;">✅ &nbsp;Ratification brownfield propre — les 112 typologies YAML existantes, le LDAP bancaire et PostgreSQL 15 sont tous intégrés sans contradiction.</p>
+      <p style="font-size:13px;">✅ &nbsp;Actions A1/A2/A3 déjà intégrées (CycleDetectedException, profil dev auth in-memory, validation YAML Schema) — revue d'équipe effective.</p>
+    </div>
+  </div>
+
+  <div class="footer">
+    Rapport généré le 23 juin 2026 · workspace : <code>prjdocs/planning-artifacts/architecture/architecture-bmad690-2026-06-23/reviews/</code>
+  </div>
+
+</div>
+</body>
+</html>

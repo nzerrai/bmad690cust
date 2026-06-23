@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GenData — Dashboard Workspace</title>
+<style>
+/*
+ * Spine sections illustrated by this mock:
+ * EXPERIENCE.md:
+ *   - Information Architecture › Workspace Dashboard surface
+ *   - Component Patterns › KPI Cards, Project Cards, Activity Feed, Sidebar TreeView
+ *   - State Patterns › Normal (populated workspace)
+ *   - Key Flows › Flow4 Omar: onboarding zero-friction — sidebar navigation, team workspace
+ *   - Layout & Spacing › Three-zone fixed structure (topbar / sidebar / content)
+ * DESIGN.md:
+ *   - Layout & Spacing › topbar 48px, sidebar 260px, content flex:1
+ *   - Colors › primary, primary-pale, success, surface, background, text-primary/secondary
+ *   - Typography › display (KPI values), heading, body, caption, label
+ *   - Components › button-primary, sidebar-active-item
+ */
+
+/* ── Reset ──────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Tokens ─────────────────────────────────────────── */
+:root {
+  --primary:        #1565c0;
+  --primary-hover:  #1976d2;
+  --primary-pale:   #e3f2fd;
+  --surface:        #ffffff;
+  --background:     #f5f5f5;
+  --border:         #e0e0e0;
+  --border-hover:   #90caf9;
+  --success:        #2e7d32;
+  --success-pale:   #e8f5e9;
+  --warning:        #f57c00;
+  --error:          #d32f2f;
+  --text-primary:   #1a1a2e;
+  --text-secondary: #757575;
+  --text-disabled:  #9e9e9e;
+
+  --rounded-sm: 4px;
+  --rounded-md: 6px;
+  --rounded-lg: 8px;
+
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  12px;
+  --space-lg:  16px;
+  --space-xl:  20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Roboto Mono', monospace;
+}
+
+/* ── Browser chrome frame ────────────────────────────── */
+body {
+  background: #2b2b2b;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+  font-family: var(--font-sans);
+}
+
+.browser-chrome {
+  width: 1440px;
+  max-width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  background: var(--surface);
+}
+
+/* browser title bar */
+.chrome-bar {
+  height: 38px;
+  background: #3c3c3c;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 12px;
+}
+.chrome-dots {
+  display: flex;
+  gap: 6px;
+}
+.chrome-dots span {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+}
+.chrome-dots span:nth-child(1) { background: #ff5f57; }
+.chrome-dots span:nth-child(2) { background: #ffbd2e; }
+.chrome-dots span:nth-child(3) { background: #28c840; }
+
+.chrome-addressbar {
+  flex: 1;
+  height: 24px;
+  background: #555;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  color: #ccc;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+/* ── App shell ────────────────────────────────────────── */
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 862px; /* 900 - 38 chrome bar */
+  overflow: hidden;
+}
+
+/* ── Topbar ───────────────────────────────────────────── */
+.topbar {
+  height: 48px;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-lg);
+  gap: var(--space-lg);
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.topbar-logo {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+}
+.topbar-breadcrumb .sep { color: rgba(255,255,255,0.4); }
+.topbar-breadcrumb .active { color: #ffffff; font-weight: 500; }
+
+.topbar-spacer { flex: 1; }
+
+.topbar-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  border: 2px solid rgba(255,255,255,0.5);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #fff;
+  cursor: pointer;
+}
+
+/* ── Body (sidebar + content) ─────────────────────────── */
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Sidebar ──────────────────────────────────────────── */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sidebar-workspace-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-secondary);
+}
+.sidebar-settings-btn {
+  width: 20px; height: 20px;
+  border-radius: var(--rounded-sm);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+
+.sidebar-tree {
+  flex: 1;
+  padding: var(--space-sm) 0;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 6px var(--space-lg);
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-item:hover { background: var(--background); }
+.tree-item.active {
+  background: var(--primary-pale);
+  color: var(--primary);
+  font-weight: 600;
+}
+.tree-item.workspace {
+  font-weight: 700;
+  font-size: 13px;
+  padding-left: var(--space-lg);
+}
+.tree-item.project { padding-left: 28px; }
+.tree-item.subproject { padding-left: 44px; font-size: 12px; color: var(--text-secondary); }
+.tree-item.subproject.active { color: var(--primary); }
+
+.tree-icon { font-size: 13px; flex-shrink: 0; }
+.tree-arrow {
+  width: 14px; height: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  margin-right: -4px;
+}
+.tree-arrow.open { transform: rotate(90deg); }
+
+.sidebar-footer {
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--border);
+}
+.btn-new-project {
+  width: 100%;
+  height: 32px;
+  border: 1px dashed var(--border);
+  border-radius: var(--rounded-md);
+  background: none;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--space-xs);
+}
+.btn-new-project:hover {
+  background: var(--primary-pale);
+  border-color: var(--primary);
+}
+
+/* ── Content area ─────────────────────────────────────── */
+.content {
+  flex: 1;
+  background: var(--background);
+  overflow-y: auto;
+  padding: var(--space-2xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xl);
+}
+
+/* ── Page header ──────────────────────────────────────── */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.page-header-left { display: flex; flex-direction: column; gap: var(--space-xs); }
+.page-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.page-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.page-meta-sep { color: var(--border); }
+.badge-dept {
+  display: inline-flex; align-items: center;
+  background: var(--primary-pale);
+  color: var(--primary);
+  border-radius: var(--rounded-sm);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── KPI cards ────────────────────────────────────────── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-lg);
+}
+.kpi-card {
+  background: var(--surface);
+  border-radius: var(--rounded-lg);
+  border: 1px solid var(--border);
+  padding: var(--space-lg) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-secondary);
+}
+.kpi-value {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.kpi-delta {
+  font-size: 12px;
+  color: var(--success);
+  font-weight: 600;
+}
+.kpi-delta.neutral { color: var(--text-secondary); font-weight: 400; }
+
+/* ── Projects + activity two-col ──────────────────────── */
+.main-row {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--space-2xl);
+  align-items: start;
+}
+
+/* ── Projects section ─────────────────────────────────── */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+.section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.section-link {
+  font-size: 12px;
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-lg);
+}
+
+.project-card {
+  background: var(--surface);
+  border-radius: var(--rounded-lg);
+  border: 1px solid var(--border);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  position: relative;
+}
+.project-card:hover {
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+  border-color: var(--border-hover);
+}
+
+.project-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+.project-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex: 1;
+}
+.project-menu {
+  width: 24px; height: 24px;
+  border-radius: var(--rounded-sm);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+}
+.project-menu:hover { background: var(--background); }
+
+.project-stats {
+  display: flex;
+  gap: var(--space-lg);
+}
+.project-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.project-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.project-stat-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.project-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border);
+}
+.project-activity {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.btn-open {
+  height: 26px;
+  padding: 0 10px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--rounded-md);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── Activity feed ────────────────────────────────────── */
+.activity-feed {
+  background: var(--surface);
+  border-radius: var(--rounded-lg);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+.activity-feed-header {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.activity-day-label {
+  padding: var(--space-sm) var(--space-lg);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-secondary);
+  background: var(--background);
+  border-bottom: 1px solid var(--border);
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border);
+}
+.activity-item:last-child { border-bottom: none; }
+
+.activity-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  width: 20px;
+  text-align: center;
+}
+.activity-body { flex: 1; min-width: 0; }
+.activity-text {
+  font-size: 12px;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+.activity-actor { font-weight: 600; }
+.activity-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+</style>
+</head>
+<body>
+
+<div class="browser-chrome">
+  <!-- Browser chrome bar -->
+  <div class="chrome-bar">
+    <div class="chrome-dots">
+      <span></span><span></span><span></span>
+    </div>
+    <div class="chrome-addressbar">
+      gendata.internal/workspaces/kyc-department
+    </div>
+  </div>
+
+  <!-- App shell -->
+  <div class="app">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="topbar-logo">GenData</div>
+      <div class="topbar-breadcrumb">
+        <span>KYC Department</span>
+        <span class="sep">›</span>
+        <span class="active">Tableau de bord</span>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-avatar">NZ</div>
+    </div>
+
+    <!-- App body -->
+    <div class="app-body">
+
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-workspace-label">Département</span>
+          <button class="sidebar-settings-btn">⚙</button>
+        </div>
+
+        <nav class="sidebar-tree">
+
+          <!-- Workspace root -->
+          <div class="tree-item workspace active">
+            <span class="tree-icon">🏢</span>
+            <span>KYC Department</span>
+          </div>
+
+          <!-- Virements SEPA (expanded) -->
+          <div class="tree-item project">
+            <span class="tree-arrow open">▶</span>
+            <span class="tree-icon">📁</span>
+            <span>Virements SEPA</span>
+          </div>
+          <div class="tree-item subproject">
+            <span class="tree-icon">📂</span>
+            <span>Tests unitaires</span>
+          </div>
+          <div class="tree-item subproject">
+            <span class="tree-icon">📂</span>
+            <span>Tests régression</span>
+          </div>
+
+          <!-- Paiements CB (collapsed) -->
+          <div class="tree-item project">
+            <span class="tree-arrow">▶</span>
+            <span class="tree-icon">📁</span>
+            <span>Paiements CB</span>
+          </div>
+
+          <!-- KYC Personnes (collapsed) -->
+          <div class="tree-item project">
+            <span class="tree-arrow">▶</span>
+            <span class="tree-icon">📁</span>
+            <span>KYC Personnes</span>
+          </div>
+
+          <!-- Transactions SWIFT (collapsed) -->
+          <div class="tree-item project">
+            <span class="tree-arrow">▶</span>
+            <span class="tree-icon">📁</span>
+            <span>Transactions SWIFT</span>
+          </div>
+
+        </nav>
+
+        <div class="sidebar-footer">
+          <button class="btn-new-project">+ Nouveau projet</button>
+        </div>
+      </aside>
+
+      <!-- Content area -->
+      <main class="content">
+
+        <!-- Page header -->
+        <div class="page-header">
+          <div class="page-header-left">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="page-title">KYC Department</div>
+              <span class="badge-dept">Département</span>
+            </div>
+            <div class="page-meta">
+              <span>👥 12 membres</span>
+              <span class="page-meta-sep">·</span>
+              <span>Créé le 4 mars 2024</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPI cards -->
+        <div class="kpi-row">
+          <div class="kpi-card">
+            <div class="kpi-label">Projets</div>
+            <div class="kpi-value">8</div>
+            <div class="kpi-delta">+3 ce mois</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Datasets</div>
+            <div class="kpi-value">47</div>
+            <div class="kpi-delta">+8 ce mois</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Lignes générées</div>
+            <div class="kpi-value" style="font-size:22px;">12.4 M</div>
+            <div class="kpi-delta">+2.1 M ce mois</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Dernière activité</div>
+            <div class="kpi-value" style="font-size:20px; font-weight:600;">il y a 2h</div>
+            <div class="kpi-delta neutral">Yann B. · génération</div>
+          </div>
+        </div>
+
+        <!-- Projects + Activity two-col -->
+        <div class="main-row">
+
+          <!-- Projects section -->
+          <div>
+            <div class="section-header">
+              <div class="section-title">Projets récents</div>
+              <span class="section-link">Voir tous les projets →</span>
+            </div>
+            <div class="projects-grid">
+
+              <div class="project-card">
+                <div class="project-card-top">
+                  <div class="project-name">Virements SEPA</div>
+                  <button class="project-menu">···</button>
+                </div>
+                <div class="project-stats">
+                  <div class="project-stat">
+                    <div class="project-stat-value">3</div>
+                    <div class="project-stat-label">Sous-projets</div>
+                  </div>
+                  <div class="project-stat">
+                    <div class="project-stat-value">8</div>
+                    <div class="project-stat-label">Datasets</div>
+                  </div>
+                </div>
+                <div class="project-card-footer">
+                  <span class="project-activity">Actif il y a 30min</span>
+                  <button class="btn-open">Ouvrir →</button>
+                </div>
+              </div>
+
+              <div class="project-card">
+                <div class="project-card-top">
+                  <div class="project-name">Paiements CB</div>
+                  <button class="project-menu">···</button>
+                </div>
+                <div class="project-stats">
+                  <div class="project-stat">
+                    <div class="project-stat-value">2</div>
+                    <div class="project-stat-label">Sous-projets</div>
+                  </div>
+                  <div class="project-stat">
+                    <div class="project-stat-value">12</div>
+                    <div class="project-stat-label">Datasets</div>
+                  </div>
+                </div>
+                <div class="project-card-footer">
+                  <span class="project-activity">Actif il y a 2h</span>
+                  <button class="btn-open">Ouvrir →</button>
+                </div>
+              </div>
+
+              <div class="project-card">
+                <div class="project-card-top">
+                  <div class="project-name">KYC Personnes</div>
+                  <button class="project-menu">···</button>
+                </div>
+                <div class="project-stats">
+                  <div class="project-stat">
+                    <div class="project-stat-value">5</div>
+                    <div class="project-stat-label">Sous-projets</div>
+                  </div>
+                  <div class="project-stat">
+                    <div class="project-stat-value">19</div>
+                    <div class="project-stat-label">Datasets</div>
+                  </div>
+                </div>
+                <div class="project-card-footer">
+                  <span class="project-activity">Actif hier</span>
+                  <button class="btn-open">Ouvrir →</button>
+                </div>
+              </div>
+
+              <div class="project-card">
+                <div class="project-card-top">
+                  <div class="project-name">Transactions SWIFT</div>
+                  <button class="project-menu">···</button>
+                </div>
+                <div class="project-stats">
+                  <div class="project-stat">
+                    <div class="project-stat-value">1</div>
+                    <div class="project-stat-label">Sous-projet</div>
+                  </div>
+                  <div class="project-stat">
+                    <div class="project-stat-value">8</div>
+                    <div class="project-stat-label">Datasets</div>
+                  </div>
+                </div>
+                <div class="project-card-footer">
+                  <span class="project-activity">Actif il y a 3 jours</span>
+                  <button class="btn-open">Ouvrir →</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Activity feed -->
+          <div class="activity-feed">
+            <div class="activity-feed-header">Activité récente</div>
+
+            <div class="activity-day-label">Aujourd'hui</div>
+
+            <div class="activity-item">
+              <div class="activity-icon">✅</div>
+              <div class="activity-body">
+                <div class="activity-text">
+                  <span class="activity-actor">Yann B.</span> a généré 50 000 lignes — dataset <em>Virements SEPA v3</em>
+                </div>
+                <div class="activity-meta">il y a 30min</div>
+              </div>
+            </div>
+
+            <div class="activity-item">
+              <div class="activity-icon">📤</div>
+              <div class="activity-body">
+                <div class="activity-text">
+                  <span class="activity-actor">Fatima D.</span> a exporté — dataset <em>KYC_Personnes_test</em>
+                </div>
+                <div class="activity-meta">il y a 1h</div>
+              </div>
+            </div>
+
+            <div class="activity-item">
+              <div class="activity-icon">🗄️</div>
+              <div class="activity-body">
+                <div class="activity-text">
+                  <span class="activity-actor">Omar M.</span> a importé un DDL — <em>Transactions SWIFT</em>
+                </div>
+                <div class="activity-meta">il y a 2h</div>
+              </div>
+            </div>
+
+            <div class="activity-day-label">Hier</div>
+
+            <div class="activity-item">
+              <div class="activity-icon">📁</div>
+              <div class="activity-body">
+                <div class="activity-text">
+                  <span class="activity-actor">Yann B.</span> a créé le projet <em>Virements SEPA</em>
+                </div>
+                <div class="activity-meta">14:32</div>
+              </div>
+            </div>
+
+            <div class="activity-item">
+              <div class="activity-icon">📂</div>
+              <div class="activity-body">
+                <div class="activity-text">
+                  <span class="activity-actor">Fatima D.</span> a créé le sous-projet <em>KYC_Personnes / Tests_régression</em>
+                </div>
+                <div class="activity-meta">09:15</div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </main>
+    </div><!-- app-body -->
+  </div><!-- app -->
+</div><!-- browser-chrome -->
+
+</body>
+</html>

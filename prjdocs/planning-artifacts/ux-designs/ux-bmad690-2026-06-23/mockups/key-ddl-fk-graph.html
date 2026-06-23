@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GenData — Import DDL · Transactions SWIFT</title>
+<style>
+/*
+ * Spine sections illustrated by this mock:
+ * - EXPERIENCE.md › Key Flows › Flow 3 (DDL/SQL import, FK analysis, schema generation)
+ * - EXPERIENCE.md › Component Patterns › C-05 FKGraphCanvas (node states: parent green / child blue, SVG arrow, hover FK tooltip)
+ * - EXPERIENCE.md › State Patterns › FK cycle detection (none detected → success alert)
+ * - EXPERIENCE.md › Information Architecture › DDL Import surface (/projects/:id/ddl)
+ * - EXPERIENCE.md › Component Patterns › SeedBadge (C-02), ColumnConfigRow table
+ * - DESIGN.md › Colors › sql-dark, sql-keyword, success, primary
+ * - DESIGN.md › Components › button-primary, button-success, alert-success
+ * - DESIGN.md › Layout & Spacing › Three-zone layout (topbar / sidebar / content)
+ */
+
+/* ── Reset ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Tokens ─────────────────────────────────────────────── */
+:root {
+  --primary:        #1565c0;
+  --primary-hover:  #1976d2;
+  --primary-pale:   #e3f2fd;
+  --surface:        #ffffff;
+  --background:     #f5f5f5;
+  --border:         #e0e0e0;
+  --border-hover:   #90caf9;
+  --success:        #2e7d32;
+  --success-pale:   #e8f5e9;
+  --warning:        #f57c00;
+  --error:          #d32f2f;
+  --text-primary:   #1a1a2e;
+  --text-secondary: #757575;
+  --text-disabled:  #9e9e9e;
+  --sql-dark:       #1e272c;
+  --sql-keyword:    #80cbc4;
+  --sql-string:     #b2dfdb;
+  --sql-body:       #cfd8dc;
+  --sql-comment:    #607d8b;
+
+  --rounded-sm: 4px;
+  --rounded-md: 6px;
+  --rounded-lg: 8px;
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'Roboto Mono', monospace;
+}
+
+/* ── Base ────────────────────────────────────────────────── */
+body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--background);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Topbar ──────────────────────────────────────────────── */
+.topbar {
+  height: 48px;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 16px;
+  flex-shrink: 0;
+  z-index: 100;
+}
+.topbar-logo {
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.topbar-logo span {
+  opacity: 0.7;
+  font-weight: 400;
+}
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255,255,255,0.75);
+  font-size: 13px;
+}
+.topbar-breadcrumb a {
+  color: rgba(255,255,255,0.75);
+  text-decoration: none;
+}
+.topbar-breadcrumb a:hover { color: #ffffff; }
+.topbar-breadcrumb .sep { color: rgba(255,255,255,0.4); }
+.topbar-breadcrumb .current { color: #ffffff; font-weight: 600; }
+.topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topbar-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  display: flex; align-items: center; justify-content: center;
+  color: #ffffff; font-weight: 700; font-size: 13px;
+}
+
+/* ── Body layout ─────────────────────────────────────────── */
+.layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.sidebar-header {
+  padding: 12px 16px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-header-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+.sidebar-header-btn {
+  width: 24px; height: 24px;
+  border: none; background: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-radius: var(--rounded-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-primary);
+  user-select: none;
+}
+.tree-item:hover { background: var(--background); }
+.tree-item.active {
+  background: var(--primary-pale);
+  color: var(--primary);
+  font-weight: 600;
+}
+.tree-item .icon { font-size: 14px; flex-shrink: 0; }
+.tree-item .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-indent-1 { padding-left: 32px; }
+.tree-indent-2 { padding-left: 48px; }
+.tree-indent-3 { padding-left: 64px; }
+.tree-section {
+  padding: 8px 16px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-disabled);
+}
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ── Content ─────────────────────────────────────────────── */
+.content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.page-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+.page-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* ── Cards ───────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--rounded-lg);
+  overflow: hidden;
+}
+.card-header {
+  height: 48px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.card-header.dark {
+  background: var(--sql-dark);
+  border-bottom-color: rgba(255,255,255,0.08);
+}
+.card-header-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+.card-header.dark .card-header-title { color: #ffffff; }
+
+/* ── Two-column split ────────────────────────────────────── */
+.split {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: 20px;
+  align-items: start;
+}
+
+/* ── Monaco editor simulation ────────────────────────────── */
+.monaco-editor {
+  background: var(--sql-dark);
+  padding: 16px;
+  min-height: 400px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+.monaco-editor .kw  { color: var(--sql-keyword); }
+.monaco-editor .ident { color: var(--sql-body); }
+.monaco-editor .type { color: #b2dfdb; }
+.monaco-editor .cmt  { color: var(--sql-comment); font-style: italic; }
+.monaco-editor .punc { color: #90a4ae; }
+.monaco-editor .ln {
+  display: inline-block;
+  width: 28px;
+  color: #455a64;
+  text-align: right;
+  margin-right: 16px;
+  user-select: none;
+}
+
+/* ── FK Graph panel ──────────────────────────────────────── */
+.fk-badge {
+  background: var(--primary-pale);
+  color: var(--primary);
+  border-radius: var(--rounded-sm);
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.alert {
+  padding: 10px 16px;
+  font-size: 13px;
+  margin: 12px 16px 4px;
+  border-radius: var(--rounded-md);
+}
+.alert-success {
+  background: var(--success-pale);
+  border-left: 4px solid var(--success);
+  color: #1b5e20;
+}
+.alert-info {
+  background: var(--primary-pale);
+  border-left: 4px solid var(--primary);
+  color: #0d47a1;
+}
+
+/* ── FK Graph canvas ─────────────────────────────────────── */
+.fk-canvas {
+  background: #fafafa;
+  border: 1px solid var(--border);
+  border-radius: var(--rounded-sm);
+  margin: 12px 16px 8px;
+  position: relative;
+  height: 260px;
+  overflow: hidden;
+}
+.fk-canvas-toolbar {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  gap: 4px;
+}
+.fk-canvas-toolbar button {
+  width: 28px; height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--rounded-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.fk-node {
+  position: absolute;
+  border-radius: var(--rounded-lg);
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  min-width: 160px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+.fk-node-cols {
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 400;
+  font-family: var(--font-mono);
+  opacity: 0.85;
+  line-height: 1.6;
+}
+.fk-node-cols .fk-col { display: block; }
+.fk-node-cols .fk-col-pk { opacity: 1; font-weight: 700; }
+.fk-node-cols .fk-col-fk { color: #ffe082; }
+.fk-node.parent { background: var(--success); top: 30px; left: 32px; }
+.fk-node.child  { background: var(--primary); top: 30px; right: 32px; }
+.fk-arrow-label {
+  position: absolute;
+  top: 98px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--rounded-sm);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  white-space: nowrap;
+  z-index: 2;
+}
+.fk-graph-svg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* ── Generation config table ─────────────────────────────── */
+.config-card { margin-top: 0; }
+.config-card .card-header { height: 48px; }
+.config-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.config-table th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+.config-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+.config-table tr:last-child td { border-bottom: none; }
+.order-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; height: 24px;
+  background: var(--primary-pale);
+  color: var(--primary);
+  border-radius: var(--rounded-sm);
+  font-size: 13px;
+  font-weight: 700;
+}
+.table-name {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+.seed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--rounded-md);
+  padding: 3px 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: pointer;
+}
+.seed-badge:hover { border-color: var(--border-hover); }
+.seed-badge .copy-icon { font-size: 12px; color: var(--text-secondary); }
+.format-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--primary-pale);
+  color: var(--primary);
+  border-radius: var(--rounded-sm);
+  font-size: 12px;
+  font-weight: 600;
+}
+.config-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px;
+  height: 36px;
+  border-radius: var(--rounded-md);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn-primary {
+  background: var(--primary);
+  color: #ffffff;
+}
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-success {
+  background: var(--success);
+  color: #ffffff;
+}
+.btn-success:hover { background: #388e3c; }
+.btn-secondary {
+  background: var(--surface);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+</style>
+</head>
+<body>
+
+<!-- ── Topbar ── -->
+<header class="topbar">
+  <div class="topbar-logo">Gen<span>Data</span></div>
+  <nav class="topbar-breadcrumb">
+    <a href="#">KYC Department</a>
+    <span class="sep">›</span>
+    <a href="#">Transactions SWIFT</a>
+    <span class="sep">›</span>
+    <a href="#">Tests intégration</a>
+    <span class="sep">›</span>
+    <span class="current">Import DDL</span>
+  </nav>
+  <div class="topbar-actions">
+    <div class="topbar-avatar">NO</div>
+  </div>
+</header>
+
+<!-- ── Body ── -->
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-header-label">KYC Department</span>
+      <button class="sidebar-header-btn">⚙</button>
+    </div>
+
+    <div class="tree-section">Projets</div>
+    <div class="tree-item tree-indent-1">
+      <span class="icon">📁</span>
+      <span class="label">Transactions SWIFT</span>
+      <span>▾</span>
+    </div>
+    <div class="tree-item tree-indent-2">
+      <span class="icon">📂</span>
+      <span class="label">Tests intégration</span>
+      <span>▾</span>
+    </div>
+    <div class="tree-item tree-indent-3">
+      <span class="icon">🗄️</span>
+      <span class="label">Dataset SWIFT CSV</span>
+    </div>
+    <div class="tree-item tree-indent-3 active">
+      <span class="icon">🗄️</span>
+      <span class="label">Import DDL</span>
+    </div>
+    <div class="tree-item tree-indent-2">
+      <span class="icon">📂</span>
+      <span class="label">Tests performance</span>
+    </div>
+    <div class="tree-item tree-indent-1">
+      <span class="icon">📁</span>
+      <span class="label">Virements SEPA</span>
+    </div>
+    <div class="tree-item tree-indent-1">
+      <span class="icon">📁</span>
+      <span class="label">Cartes bancaires</span>
+    </div>
+
+    <div class="tree-section" style="margin-top: 8px;">Datasets récents</div>
+    <div class="tree-item tree-indent-1">
+      <span class="icon">📊</span>
+      <span class="label">iban_test_2026</span>
+    </div>
+    <div class="tree-item tree-indent-1">
+      <span class="icon">📊</span>
+      <span class="label">kyc_batch_avril</span>
+    </div>
+
+    <div class="sidebar-footer">
+      GenData v2.4.1
+    </div>
+  </aside>
+
+  <!-- ── Content ── -->
+  <main class="content">
+
+    <!-- Page header -->
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Import DDL — Transactions SWIFT</h1>
+        <p class="page-subtitle">Importez un schéma SQL (CREATE TABLE), analysez les dépendances FK et configurez la génération par table.</p>
+      </div>
+    </div>
+
+    <!-- Split: Editor + Graph -->
+    <div class="split">
+
+      <!-- Left: Monaco editor -->
+      <div class="card">
+        <div class="card-header dark">
+          <span class="card-header-title">Schéma SQL</span>
+          <button class="btn btn-primary" style="height:32px; font-size:12px; padding:0 12px;">Analyser le DDL</button>
+        </div>
+        <div class="monaco-editor">
+<span class="ln">1</span><span class="kw">CREATE TABLE</span> <span class="ident">swift_message</span> <span class="punc">(</span>
+<span class="ln">2</span>  <span class="ident">id_message</span>     <span class="type">UUID</span>           <span class="kw">PRIMARY KEY</span><span class="punc">,</span>
+<span class="ln">3</span>  <span class="ident">bic_emetteur</span>   <span class="type">CHAR</span><span class="punc">(</span><span class="ident">11</span><span class="punc">)</span>       <span class="kw">NOT NULL</span><span class="punc">,</span>
+<span class="ln">4</span>  <span class="ident">bic_recepteur</span>  <span class="type">CHAR</span><span class="punc">(</span><span class="ident">11</span><span class="punc">)</span>       <span class="kw">NOT NULL</span><span class="punc">,</span>
+<span class="ln">5</span>  <span class="ident">montant</span>        <span class="type">DECIMAL</span><span class="punc">(</span><span class="ident">15</span><span class="punc">,</span><span class="ident">2</span><span class="punc">)</span>   <span class="kw">NOT NULL</span><span class="punc">,</span>
+<span class="ln">6</span>  <span class="ident">devise</span>         <span class="type">CHAR</span><span class="punc">(</span><span class="ident">3</span><span class="punc">)</span>        <span class="kw">NOT NULL</span><span class="punc">,</span>
+<span class="ln">7</span>  <span class="ident">date_valeur</span>    <span class="type">DATE</span>           <span class="kw">NOT NULL</span>
+<span class="ln">8</span><span class="punc">);</span>
+<span class="ln">9</span>
+<span class="ln">10</span><span class="kw">CREATE TABLE</span> <span class="ident">contrepartie</span> <span class="punc">(</span>
+<span class="ln">11</span>  <span class="ident">id_contrepartie</span> <span class="type">UUID</span>          <span class="kw">PRIMARY KEY</span><span class="punc">,</span>
+<span class="ln">12</span>  <span class="ident">id_message</span>      <span class="type">UUID</span>          <span class="kw">REFERENCES</span> <span class="ident">swift_message</span><span class="punc">(</span><span class="ident">id_message</span><span class="punc">),</span>
+<span class="ln">13</span>  <span class="ident">nom_banque</span>      <span class="type">VARCHAR</span><span class="punc">(</span><span class="ident">100</span><span class="punc">),</span>
+<span class="ln">14</span>  <span class="ident">pays_iso</span>        <span class="type">CHAR</span><span class="punc">(</span><span class="ident">2</span><span class="punc">)</span>
+<span class="ln">15</span><span class="punc">);</span>
+        </div>
+      </div>
+
+      <!-- Right: FK Graph -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-header-title">Graphe de dépendances FK</span>
+          <span class="fk-badge">2 tables · 1 relation FK</span>
+        </div>
+
+        <div class="alert alert-success" style="margin: 12px 16px 0;">
+          ✓ Aucun cycle FK détecté. Ordre de génération&nbsp;: <strong>swift_message → contrepartie</strong>
+        </div>
+
+        <!-- FK canvas with SVG arrow -->
+        <div class="fk-canvas">
+
+          <!-- SVG arrow from swift_message to contrepartie -->
+          <svg class="fk-graph-svg" viewBox="0 0 500 260" preserveAspectRatio="none">
+            <defs>
+              <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill="#9e9e9e"/>
+              </marker>
+            </defs>
+            <!-- Arrow from right edge of left node to left edge of right node -->
+            <path d="M 196 105 C 260 105, 260 105, 296 105"
+                  stroke="#9e9e9e" stroke-width="2" fill="none"
+                  marker-end="url(#arrowhead)" stroke-dasharray="5,3"/>
+          </svg>
+
+          <!-- Parent node: swift_message -->
+          <div class="fk-node parent" style="width:180px;">
+            <div>swift_message</div>
+            <div class="fk-node-cols">
+              <span class="fk-col fk-col-pk">🔑 id_message</span>
+              <span class="fk-col">bic_emetteur</span>
+              <span class="fk-col">bic_recepteur</span>
+              <span class="fk-col">montant</span>
+              <span class="fk-col">devise</span>
+              <span class="fk-col">date_valeur</span>
+            </div>
+          </div>
+
+          <!-- FK label in middle -->
+          <div class="fk-arrow-label">id_message</div>
+
+          <!-- Child node: contrepartie -->
+          <div class="fk-node child" style="width:175px;">
+            <div>contrepartie</div>
+            <div class="fk-node-cols">
+              <span class="fk-col fk-col-pk">🔑 id_contrepartie</span>
+              <span class="fk-col fk-col-fk">🔗 id_message (FK)</span>
+              <span class="fk-col">nom_banque</span>
+              <span class="fk-col">pays_iso</span>
+            </div>
+          </div>
+
+          <!-- Canvas toolbar -->
+          <div class="fk-canvas-toolbar">
+            <button title="Zoom avant">+</button>
+            <button title="Zoom arrière">−</button>
+            <button title="Ajuster" style="width:auto; padding:0 8px; font-size:11px;">⊡ Fit</button>
+          </div>
+        </div>
+
+        <div style="padding: 4px 16px 12px; font-size: 12px; color: var(--text-secondary);">
+          🟢 Table parente (pas de FK entrante)&nbsp;&nbsp;·&nbsp;&nbsp;🔵 Table enfant (FK entrante)&nbsp;&nbsp;·&nbsp;&nbsp;Glisser pour repositionner
+        </div>
+      </div>
+    </div>
+
+    <!-- Generation config table -->
+    <div class="card config-card">
+      <div class="card-header">
+        <span class="card-header-title">Configuration de génération</span>
+        <span style="font-size:12px; color:var(--text-secondary);">Seed globale commune à toutes les tables</span>
+      </div>
+      <table class="config-table">
+        <thead>
+          <tr>
+            <th>Table</th>
+            <th>Ordre</th>
+            <th>Lignes</th>
+            <th>Seed</th>
+            <th>Format</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="table-name">swift_message</span></td>
+            <td><span class="order-badge">1</span></td>
+            <td>10 000</td>
+            <td>
+              <span class="seed-badge">
+                7341829056
+                <span class="copy-icon">⎘</span>
+              </span>
+            </td>
+            <td><span class="format-chip">JSON</span></td>
+            <td style="text-align:right;">
+              <button class="btn btn-secondary" style="height:30px; font-size:12px; padding:0 10px;">Configurer</button>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="table-name">contrepartie</span></td>
+            <td><span class="order-badge">2</span></td>
+            <td>10 000</td>
+            <td>
+              <span class="seed-badge">
+                7341829057
+                <span class="copy-icon">⎘</span>
+              </span>
+            </td>
+            <td><span class="format-chip">JSON</span></td>
+            <td style="text-align:right;">
+              <button class="btn btn-secondary" style="height:30px; font-size:12px; padding:0 10px;">Configurer</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="config-footer">
+        <button class="btn btn-success">⚡ Générer le schéma complet</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>
